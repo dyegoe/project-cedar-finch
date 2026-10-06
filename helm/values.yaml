@@ -1,0 +1,83 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/dyegoe/project-cedar-finch
+  pullPolicy: Always
+  tag: main
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+containerPort: 8080
+
+config:
+  APP_NAME: Legacy-Web-Service
+  APP_ENV: production
+  DB_HOST: localhost
+  DB_PORT: "3306"
+  CACHE_HOST: localhost
+
+secrets:
+  DB_PASSWORD: "changeme"
+  CACHE_PASSWORD: "changeme"
+
+service:
+  type: ClusterIP
+  port: 80
+
+httpRoute:
+  enabled: true
+  annotations: {}
+  # Gateway the route attaches to; it must already exist in the cluster.
+  parentRefs:
+    - name: eg
+      namespace: default
+  # Empty list matches every hostname.
+  hostnames: []
+  path: /
+
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 2
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /readyz
+    port: http
+  initialDelaySeconds: 3
+  periodSeconds: 5
+  timeoutSeconds: 2
+  failureThreshold: 3
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 82
+  runAsGroup: 82
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - NET_RAW
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
