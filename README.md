@@ -58,6 +58,34 @@ The service is a small, stateless HTTP endpoint, so I used a single container wi
 
 - `/readyz` returns 200 without checking the database or cache. The supplied service only reads their host settings, so no dependencies were added.
 
+### Publish and deploy from GHCR
+
+Pull requests targeting `main` build the image without publishing it. A successful push to `main` publishes `ghcr.io/dyegoe/project-cedar-finch` with both the full commit SHA and `main` tags. The workflow authenticates with its `GITHUB_TOKEN`; it does not require a registry secret. After the first publish, set the package visibility in GitHub as needed.
+
+To pull a private image locally, authenticate Docker or Podman to `ghcr.io` with a GitHub account that has package access. Select the immutable full commit SHA tag in the chart:
+
+```sh
+docker pull ghcr.io/dyegoe/project-cedar-finch:"$(git rev-parse HEAD)"
+
+helm upgrade --install legacy-web-service helm \
+  --set image.repository=ghcr.io/dyegoe/project-cedar-finch \
+  --set-string image.tag="$(git rev-parse HEAD)" --wait
+```
+
+For a private package, Kubernetes also needs a registry pull secret with package-read access, referenced through the chart's `imagePullSecrets` value. The repository, tag, digest, and pull secrets are configurable through `image.repository`, `image.tag`, `image.digest`, and `imagePullSecrets` in the chart values. The kind instructions below continue to build and load a local image, so they do not depend on GHCR or package visibility.
+
+### Helm chart in GHCR (OCI)
+
+After the image is published, the same workflow packages the chart and, on pushes to `main`, pushes it to `oci://ghcr.io/dyegoe/charts/legacy-web-service`. Pull requests only lint and package it. Each commit gets its own chart version, `<Chart.yaml version>-g<short-sha>` (for example `0.1.0-gabc1234`), with `appVersion` set to the full commit SHA. The chart's default image tag therefore points at the image built from the same commit.
+
+```sh
+helm registry login ghcr.io -u <github-user>   # only needed for a private package
+helm install legacy-web-service oci://ghcr.io/dyegoe/charts/legacy-web-service \
+  --version 0.1.0-gabc1234 --wait
+```
+
+Set the chart package's visibility in GitHub after the first publish if public pulls are desired; it is separate from the image package.
+
 ## Run the Helm chart on kind with Podman
 
 The chart is cluster-agnostic: it creates a Gateway API `HTTPRoute` that attaches to an existing `Gateway` (`httpRoute.parentRefs`, default `eg` in the release namespace). The kind-specific setup lives in [kind/](kind/) and uses [Envoy Gateway](https://gateway.envoyproxy.io/).

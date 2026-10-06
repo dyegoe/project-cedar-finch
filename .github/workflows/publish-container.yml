@@ -1,0 +1,87 @@
+name: Build and publish container and chart
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  container:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/dyegoe/project-cedar-finch
+          tags: |
+            type=sha,format=long
+            type=raw,value=main,enable={{is_default_branch}}
+
+      - name: Build and publish image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./app
+          file: ./app/Dockerfile
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  chart:
+    needs: container
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      CHART_REGISTRY: ghcr.io/dyegoe/charts
+      PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Lint chart
+        run: helm lint helm
+
+      - name: Package chart
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          base_version="$(awk '/^version:/ {print $2}' helm/Chart.yaml)"
+          helm package helm \
+            --version "${base_version}-g${COMMIT_SHA::7}" \
+            --app-version "${COMMIT_SHA}" \
+            --destination dist
+
+      - name: Log in to GitHub Container Registry
+        if: env.PUBLISH == 'true'
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "${REGISTRY_PASSWORD}" | helm registry login ghcr.io --username "${REGISTRY_USER}" --password-stdin
+
+      - name: Publish chart
+        if: env.PUBLISH == 'true'
+        run: helm push dist/*.tgz "oci://${CHART_REGISTRY}"
