@@ -2,8 +2,11 @@ replicaCount: 2
 
 image:
   repository: ghcr.io/dyegoe/project-cedar-finch
-  pullPolicy: Always
-  tag: main
+  pullPolicy: IfNotPresent
+  # Defaults to Chart.appVersion; use an immutable tag, never a floating one like "main".
+  tag: ""
+  # Optional immutable digest (sha256:...); takes precedence over tag.
+  digest: ""
 
 imagePullSecrets: []
 nameOverride: ""
@@ -14,13 +17,13 @@ containerPort: 8080
 config:
   APP_NAME: Legacy-Web-Service
   APP_ENV: production
-  DB_HOST: localhost
+  DB_HOST: db.default.svc.cluster.local
   DB_PORT: "3306"
-  CACHE_HOST: localhost
+  CACHE_HOST: cache.default.svc.cluster.local
 
 secrets:
-  DB_PASSWORD: "changeme"
-  CACHE_PASSWORD: "changeme"
+  DB_PASSWORD: ""
+  CACHE_PASSWORD: ""
 
 service:
   type: ClusterIP
@@ -30,9 +33,10 @@ httpRoute:
   enabled: true
   annotations: {}
   # Gateway the route attaches to; it must already exist in the cluster.
+  # Omitting `namespace` means the release namespace. Set it only for cross-namespace
+  # attachment, and the Gateway listener must then allow it (allowedRoutes).
   parentRefs:
     - name: eg
-      namespace: default
   # Empty list matches every hostname.
   hostnames: []
   path: /

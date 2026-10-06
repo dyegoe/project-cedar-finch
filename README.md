@@ -60,7 +60,7 @@ The service is a small, stateless HTTP endpoint, so I used a single container wi
 
 ## Run the Helm chart on kind with Podman
 
-The chart is cluster-agnostic: it creates a Gateway API `HTTPRoute` that attaches to an existing `Gateway` (`httpRoute.parentRefs`, default `eg` in `default`). The kind-specific setup lives in [kind/](kind/) and uses [Envoy Gateway](https://gateway.envoyproxy.io/).
+The chart is cluster-agnostic: it creates a Gateway API `HTTPRoute` that attaches to an existing `Gateway` (`httpRoute.parentRefs`, default `eg` in the release namespace). The kind-specific setup lives in [kind/](kind/) and uses [Envoy Gateway](https://gateway.envoyproxy.io/).
 
 Install [kind](https://kind.sigs.k8s.io/), Helm and kubectl, then:
 
@@ -83,9 +83,12 @@ podman build -t localhost/legacy-web-service:local app
 kind load docker-image localhost/legacy-web-service:local --name cedar-finch
 helm install legacy-web-service helm \
   --set image.repository=localhost/legacy-web-service \
-  --set image.tag=local \
-  --set image.pullPolicy=IfNotPresent --wait
+  --set image.tag=local --wait
 ```
+
+The chart defaults to `pullPolicy: IfNotPresent` and an image tag of `Chart.appVersion`, so a local install must set `image.tag` to the tag you loaded into kind. Avoid reusing a floating tag like `latest` or `main`: with `IfNotPresent` the node keeps the old image, so rebuild with a new tag (e.g. `local-2`) and `helm upgrade --set image.tag=local-2`. For real clusters, set `image.tag` to an immutable release tag or `image.digest`.
+
+The sample Gateway lives in `default` and accepts routes from all namespaces. If you install the release into another namespace, point the route at it: `--set 'httpRoute.parentRefs[0].name=eg' --set 'httpRoute.parentRefs[0].namespace=default'`.
 
 Verify (no port-forward needed):
 

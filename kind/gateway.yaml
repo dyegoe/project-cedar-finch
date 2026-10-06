@@ -47,4 +47,5 @@ spec:
       port: 80
       allowedRoutes:
         namespaces:
-          from: Same
+          # Local only: accept routes from any namespace. Restrict (Same/Selector) elsewhere.
+          from: All
