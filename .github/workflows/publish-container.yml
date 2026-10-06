@@ -72,7 +72,7 @@ jobs:
           base_version="$(awk '/^version:/ {print $2}' helm/Chart.yaml)"
           helm package helm \
             --version "${base_version}-g${COMMIT_SHA::7}" \
-            --app-version "${COMMIT_SHA}" \
+            --app-version "sha-${COMMIT_SHA}" \
             --destination dist
 
       - name: Log in to GitHub Container Registry
